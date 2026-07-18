@@ -20,6 +20,7 @@ from lstm.dense_layer import DenseLayer
 from lstm.network import LSTMNetwork
 from lstm.activations import softmax
 from lstm.data import SequenceDataLoader
+from lstm.metrics import mse_loss
 
 
 def load_model(weights_path):
@@ -36,10 +37,7 @@ def load_model(weights_path):
         return None
 
 
-def mse_loss(y_true, y_pred):
-    y_true = np.asarray(y_true, dtype=np.float32).reshape(y_pred.shape)
-    y_pred = np.asarray(y_pred, dtype=np.float32)
-    return np.mean((y_pred - y_true) ** 2)
+
 
 
 def prepare_air_passengers(data_dir, seq_len=12, horizon=1, train_ratio=0.7, val_ratio=0.15):
@@ -137,7 +135,7 @@ def main():
     if model_data is None:
         return
 
-    dataset_mode = os.getenv('DATASET', 'air-passengers').lower()
+    dataset_mode = model_data.get('dataset_mode', os.getenv('DATASET', 'air-passengers')).lower()
     print(f"\nDataset mode: {dataset_mode}")
 
     if dataset_mode == 'air-passengers':
@@ -149,12 +147,14 @@ def main():
             train_ratio=0.7,
             val_ratio=0.15,
         )
+        # This is a regression task (time-series forecasting)
         regression = True
-        output_size = 1
-        hidden_size = 64
+        output_size = model_data.get('output_size', 1)
+        hidden_size = model_data.get('hidden_size', 64)
     else:
         print("\nLoading synthetic sequential test data...")
-        loader = SequenceDataLoader(
+        # Prefer saved data params from training if available
+        data_params = model_data.get('data_params') or dict(
             seq_len=50,
             input_size=1,
             num_classes=10,
@@ -163,15 +163,30 @@ def main():
             noise_level=0.1,
             seed=42,
         )
+        loader = SequenceDataLoader(**data_params)
         X_train, y_train, X_test, y_test = loader.load_data()
+        # Synthetic loader produces classification labels by design
         regression = False
-        output_size = 10
-        hidden_size = 128
+        output_size = model_data.get('output_size', 10)
+        hidden_size = model_data.get('hidden_size', 128)
+
+    # Robustly infer whether this saved model is regression or classification.
+    # Train saves no explicit `regression` flag, so infer from saved metadata:
+    # - If output_size == 1 -> regression
+    # - If a scaler is present -> regression (time-series normalization)
+    # - Otherwise fallback to earlier `regression` value
+    inferred_regression = (
+        model_data.get('regression') if 'regression' in model_data else None
+    )
+    if inferred_regression is None:
+        inferred_regression = (output_size == 1) or (model_data.get('scaler') is not None) or (dataset_mode == 'air-passengers')
+
+    regression = bool(inferred_regression)
 
     # Build and setup model
     print("\nBuilding model architecture...")
     model = build_model(
-        input_size=1,
+        input_size=X_train.shape[2] if X_train is not None else 1,
         output_size=output_size,
         hidden_size=hidden_size,
     )
@@ -200,7 +215,7 @@ def main():
         test_loss = mse_loss(y_test, y_pred)
         print(f"Test MSE: {test_loss:.4f}")
     else:
-        y_pred = model.predict(X_test)
+        y_pred = model.predict_class(X_test)
         analyze_predictions(y_test, y_pred)
 
     # Training history

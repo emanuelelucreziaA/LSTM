@@ -28,6 +28,7 @@ from lstm.activations import softmax
 from lstm.losses import CrossEntropy
 from lstm.optimizers import Adam
 from lstm.data import SequenceDataLoader, one_hot_encode
+from lstm.metrics import mse_loss
 import pickle
 
 
@@ -58,11 +59,6 @@ def build_model(input_size=1, output_size=10, hidden_size=128, regression=False)
     print(f"✓ Model built with {sum(1 for layer in model.layers)} layer(s)")
     return model
 
-
-def mse_loss(y_true, y_pred):
-    y_true = np.asarray(y_true, dtype=np.float32).reshape(y_pred.shape)
-    y_pred = np.asarray(y_pred, dtype=np.float32)
-    return np.mean((y_pred - y_true) ** 2)
 
 
 def prepare_air_passengers(
@@ -194,6 +190,7 @@ def evaluate(model, X_test, y_test, batch_size=32, regression=False):
 def main():
     """Main training pipeline"""
     dataset_mode = os.getenv('DATASET', 'air-passengers').lower()
+    data_params = None
     print("\n" + "="*70)
     print(f"LSTM Training Pipeline - dataset mode: {dataset_mode}")
     print("="*70)
@@ -215,7 +212,7 @@ def main():
         hidden_size = 64
     else:
         print("\nLoading synthetic toy classification data...")
-        loader = SequenceDataLoader(
+        data_params = dict(
             seq_len=20,
             input_size=1,
             num_classes=10,
@@ -224,6 +221,7 @@ def main():
             noise_level=0.05,
             seed=42,
         )
+        loader = SequenceDataLoader(**data_params)
         X_train, y_train, X_test, y_test = loader.load_data()
         X_val, y_val = X_test, y_test
         regression = False
@@ -292,6 +290,7 @@ def main():
         model_data = {
             'dataset_mode': dataset_mode,
             'hidden_size': hidden_size,
+            'data_params': data_params if not regression else None,
             'output_size': output_size,
             'train_losses': train_losses,
             'val_losses': val_losses,
