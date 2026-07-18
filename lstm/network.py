@@ -56,16 +56,21 @@ class LSTMNetwork:
             output: Network output (logits) of shape (batch_size, num_classes)
         """
         layer_input = X
-        
+        last_h_final = None
+
+        # Pass full sequence outputs between stacked LSTM layers
         for layer in self.layers[:-1]:  # LSTM layers
             if hasattr(layer, 'forward'):
                 # LSTM layer returns (H, h_final, C_final)
                 H, h_final, C_final = layer.forward(layer_input)
-                layer_input = h_final  # Use final hidden state for next layer
-        
+                # Forward the full hidden-state sequence to the next LSTM layer
+                layer_input = H
+                last_h_final = h_final
+
         # Final dense layer: takes final hidden state as input
-        output = self.layers[-1].forward(layer_input)
-        
+        dense_input = last_h_final if last_h_final is not None else layer_input
+        output = self.layers[-1].forward(dense_input)
+
         return output
     
     def backward(self, dL_doutput):
