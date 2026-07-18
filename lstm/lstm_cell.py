@@ -8,12 +8,18 @@ Key concepts:
 - All computations are element-wise multiplied (Hadamard product ⊙)
 
 Forward pass:
-  f_t = σ(W_f @ [h_(t-1), x_t] + b_f)                    # Forget gate
-  i_t = σ(W_i @ [h_(t-1), x_t] + b_i)                    # Input gate  
-  C̃_t = tanh(W_c @ [h_(t-1), x_t] + b_c)                # Candidate cell state
-  C_t = f_t ⊙ C_(t-1) + i_t ⊙ C̃_t                        # Cell state update
-  o_t = σ(W_o @ [h_(t-1), x_t] + b_o)                    # Output gate
-  h_t = o_t ⊙ tanh(C_t)                                  # Hidden state output
+    f_t = σ(W_f @ [h_(t-1), x_t] + b_f)                    # Forget gate
+    i_t = σ(W_i @ [h_(t-1), x_t] + b_i)                    # Input gate  
+    C̃_t = tanh(W_c @ [h_(t-1), x_t] + b_c)                # Candidate cell state
+    C_t = f_t ⊙ C_(t-1) + i_t ⊙ C̃_t                        # Cell state update
+    o_t = σ(W_o @ [h_(t-1), x_t] + b_o)                    # Output gate
+    h_t = o_t ⊙ tanh(C_t)                                  # Hidden state output
+
+Notes:
+- Weight initialization can be configured per-cell (Xavier or He) via the
+    `init` argument to `LSTMCell`.
+- Activation derivative helpers in `lstm.activations` are expected to take
+    pre-activation values (the "z" inputs) when computing derivatives.
 """
 
 import numpy as np
@@ -29,7 +35,14 @@ class LSTMCell:
         hidden_size: Size of hidden state (LSTM cell size)
     """
     
-    def __init__(self, input_size, hidden_size):
+    def __init__(self, input_size, hidden_size, init='xavier'):
+        """
+        Args:
+            input_size: Size of input at each timestep
+            hidden_size: Size of hidden state (LSTM cell size)
+            init: Weight initialization method. One of 'xavier' (default) or 'he'.
+                  Use 'he' when using ReLU activations in surrounding layers.
+        """
         self.input_size = input_size
         self.hidden_size = hidden_size
         
@@ -37,23 +50,33 @@ class LSTMCell:
         concat_size = hidden_size + input_size
         
         # Initialize weights and biases for all 4 operations (forget, input, cell, output)
-        # Using Xavier initialization
-        limit = np.sqrt(6.0 / (concat_size + hidden_size))
-        
+        # Initialization strategy can be chosen via `init`:
+        # - 'xavier' (default): good general-purpose init for tanh/sigmoid
+        # - 'he': recommended for ReLU-based networks
+        if init not in ('xavier', 'he'):
+            raise ValueError("init must be one of ('xavier', 'he')")
+
+        if init == 'xavier':
+            limit = np.sqrt(6.0 / (concat_size + hidden_size))
+            W_init = lambda shape: np.random.uniform(-limit, limit, shape)
+        else:  # he initialization (He normal)
+            std = np.sqrt(2.0 / concat_size)
+            W_init = lambda shape: np.random.randn(*shape) * std
+
         # Forget gate
-        self.W_f = np.random.uniform(-limit, limit, (concat_size, hidden_size))
+        self.W_f = W_init((concat_size, hidden_size))
         self.b_f = np.zeros((1, hidden_size))
         
         # Input gate
-        self.W_i = np.random.uniform(-limit, limit, (concat_size, hidden_size))
+        self.W_i = W_init((concat_size, hidden_size))
         self.b_i = np.zeros((1, hidden_size))
         
         # Cell candidate (tanh)
-        self.W_c = np.random.uniform(-limit, limit, (concat_size, hidden_size))
+        self.W_c = W_init((concat_size, hidden_size))
         self.b_c = np.zeros((1, hidden_size))
         
         # Output gate
-        self.W_o = np.random.uniform(-limit, limit, (concat_size, hidden_size))
+        self.W_o = W_init((concat_size, hidden_size))
         self.b_o = np.zeros((1, hidden_size))
         
         # Gradients
@@ -75,7 +98,25 @@ class LSTMCell:
         Returns:
             h_t: Hidden state at timestep t, shape (batch_size, hidden_size)
             C_t: Cell state at timestep t, shape (batch_size, hidden_size)
+
+        Notes:
+            This method caches pre-activation values (z_f, z_i, z_c, z_o)
+            which are used during the backward pass. Activation derivative
+            helpers in `lstm.activations` are expected to accept these
+            pre-activation (z) values when computing derivatives.
         """
+        # Accept 1D inputs (single sample) and treat them as batch_size=1
+        squeezed = False
+        if x_t.ndim == 1:
+            x_t = np.expand_dims(x_t, 0)
+            squeezed = True
+        if h_prev.ndim == 1:
+            h_prev = np.expand_dims(h_prev, 0)
+            squeezed = True
+        if C_prev.ndim == 1:
+            C_prev = np.expand_dims(C_prev, 0)
+            squeezed = True
+
         batch_size = x_t.shape[0]
         
         # Concatenate previous hidden state with current input
@@ -109,10 +150,14 @@ class LSTMCell:
         # h_t = o_t ⊙ tanh(C_t)
         h_t = o_t * tanh(C_t)  # Final hidden state
         
-        # Cache for backward pass
+        # Cache for backward pass (include whether inputs were originally 1D)
         self.cache = (x_t, h_prev, C_prev, concat, f_t, i_t, C_tilde, C_t, o_t,
-                      z_f, z_i, z_c, z_o)
-        
+                      z_f, z_i, z_c, z_o, squeezed)
+
+        # If inputs were 1D, return squeezed outputs for convenience
+        if squeezed:
+            return np.squeeze(h_t, axis=0), np.squeeze(C_t, axis=0)
+
         return h_t, C_t
     
     def backward(self, dh_t, dC_t):
@@ -127,12 +172,23 @@ class LSTMCell:
             dx_t: Gradient w.r.t. input x_t, shape (batch_size, input_size)
             dh_prev: Gradient w.r.t. previous hidden state, shape (batch_size, hidden_size)
             dC_prev: Gradient w.r.t. previous cell state, shape (batch_size, hidden_size)
+        
+        Notes:
+            This method expects that activation derivative functions (for
+            sigmoid/tanh) accept pre-activation (z) values; the forward
+            pass caches these values and they are used here.
         """
         if self.cache is None:
             raise ValueError("Must call forward before backward")
         
         (x_t, h_prev, C_prev, concat, f_t, i_t, C_tilde, C_t, o_t,
-         z_f, z_i, z_c, z_o) = self.cache
+         z_f, z_i, z_c, z_o, squeezed) = self.cache
+
+        # Accept 1D gradients for single-sample cases
+        if dh_t.ndim == 1:
+            dh_t = np.expand_dims(dh_t, 0)
+        if dC_t.ndim == 1:
+            dC_t = np.expand_dims(dC_t, 0)
         
         batch_size = x_t.shape[0]
         
@@ -198,6 +254,10 @@ class LSTMCell:
         # Gradient for previous cell state (through forget gate)
         dC_prev = dC_t * f_t
         
+        # Squeeze outputs if forward received 1D inputs
+        if squeezed:
+            return np.squeeze(dx_t, axis=0), np.squeeze(dh_prev, axis=0), np.squeeze(dC_prev, axis=0)
+
         return dx_t, dh_prev, dC_prev
     
     def get_gradients(self):
