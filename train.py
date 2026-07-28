@@ -139,7 +139,7 @@ def train_epoch(model, X_train, y_train, batch_size=32, regression=False):
         if regression:
             y_batch = y_batch.reshape(logits.shape)
             loss = mse_loss(y_batch, logits)
-            dL_doutput = 2.0 * (logits - y_batch) / logits.shape[0]
+            dL_doutput = 2.0 * (logits - y_batch)
         else:
             probs = softmax(logits)
             loss = model.loss_fn(y_batch, probs)
