@@ -5,23 +5,21 @@ Usage:
     python evaluate.py
 """
 
-import csv
 import os
-import sys
+import numpy as np
 import pickle
 
-from dotenv import load_dotenv
-import numpy as np
+from lstm.bootstrap import initialize_environment
 
-load_dotenv()
-
-PROJECT_ROOT = os.getenv("PROJECT_ROOT", os.path.abspath(os.path.dirname(__file__)))
-sys.path.insert(0, PROJECT_ROOT)
+PROJECT_ROOT, _ = initialize_environment()
 
 from lstm.lstm_layer import LSTMLayer
 from lstm.dense_layer import DenseLayer
 from lstm.network import LSTMNetwork
-from lstm.metrics import mse_loss
+from lstm.losses import MSELoss
+from lstm.time_series import prepare_air_passengers, inverse_scale
+
+_loss_fn = MSELoss()
 
 
 def load_model(weights_path):
@@ -39,54 +37,8 @@ def load_model(weights_path):
         return None
 
 
-def prepare_air_passengers(
-    data_dir,
-    seq_len=12,
-    horizon=1,
-    train_ratio=0.7,
-    val_ratio=0.15,
-):
-    """Load and prepare the AirPassengers dataset."""
-    csv_path = os.path.join(data_dir, "AirPassengers.csv")
-
-    if not os.path.exists(csv_path):
-        raise FileNotFoundError(f"AirPassengers.csv not found in {data_dir}")
-
-    values = []
-
-    with open(csv_path, "r", encoding="utf-8") as f:
-        reader = csv.reader(f)
-        next(reader)
-
-        for row in reader:
-            values.append(float(row[1]))
-
-    values = np.array(values, dtype=np.float32)
-
-    num_samples = len(values) - seq_len - horizon + 1
-
-    X = np.zeros((num_samples, seq_len, 1), dtype=np.float32)
-    y = np.zeros((num_samples,), dtype=np.float32)
-
-    for i in range(num_samples):
-        X[i, :, 0] = values[i : i + seq_len]
-        y[i] = values[i + seq_len + horizon - 1]
-
-    split1 = int(len(X) * train_ratio)
-    split2 = split1 + int(len(X) * val_ratio)
-
-    return (
-        X[:split1],
-        y[:split1],
-        X[split1:split2],
-        y[split1:split2],
-        X[split2:],
-        y[split2:],
-    )
-
-
-def build_model(input_size=1, hidden_size=64):
-    """Build the regression model architecture."""
+def build_model(input_size=1, output_size=1, hidden_size=64):
+    """Build model architecture (matching training)"""
     model = LSTMNetwork()
 
     model.add_lstm_layer(
@@ -96,49 +48,30 @@ def build_model(input_size=1, hidden_size=64):
         )
     )
 
-    model.add_dense_layer(
-        DenseLayer(
-            input_size=hidden_size,
-            output_size=1,
-            activation_fn=None,
-            activation_derivative=None,
-        )
-    )
-
-    return model
-
-
 def main():
-    """Evaluate the trained AirPassengers forecasting model."""
-
-    print("\n" + "=" * 70)
-    print("LSTM Evaluation: AirPassengers Forecasting")
-    print("=" * 70)
-
-    model_path = os.path.join(PROJECT_ROOT, "lstm_model.pkl")
+    """Main evaluation pipeline"""
+    print("\n" + "="*70)
+    print("LSTM Evaluation: AirPassengers regression")
+    print("="*70)
+    
+    # Load model metadata
+    model_path = os.path.join(PROJECT_ROOT, 'lstm_model.pkl')
     model_data = load_model(model_path)
 
     if model_data is None:
         return
 
-    print("\nLoading AirPassengers dataset...")
-
-    (
-        X_train,
-        y_train,
-        X_val,
-        y_val,
-        X_test,
-        y_test,
-    ) = prepare_air_passengers(
-        os.path.join(PROJECT_ROOT, "data"),
+    print("\nLoading AirPassengers test data...")
+    _, _, _, _, X_test, y_test = prepare_air_passengers(
+        os.path.join(PROJECT_ROOT, 'data'),
         seq_len=12,
         horizon=1,
         train_ratio=0.7,
         val_ratio=0.15,
     )
 
-    hidden_size = model_data.get("hidden_size", 64)
+    output_size = int(model_data.get('output_size', 1))
+    hidden_size = int(model_data.get('hidden_size', 64))
 
     print("\nBuilding model architecture...")
 
@@ -154,35 +87,27 @@ def main():
 
     model.set_weights(model_data["weights"])
 
-    scaler = model_data.get("scaler")
-
-    if scaler is not None:
-        X_test_norm = (X_test - scaler["mean"]) / scaler["std"]
-    else:
-        X_test_norm = X_test
-
+    # Predictions
     print("\nGenerating predictions...")
+    scaler = model_data.get('scaler')
+    if scaler is None:
+        print("✗ Missing scaler in saved model data.")
+        print("  Re-train the model using: python train.py")
+        return
 
-    predictions = model.forward(X_test_norm)
-    y_pred = np.squeeze(predictions, axis=-1)
+    X_test_norm = (X_test - scaler['mean']) / scaler['std']
+    logits = model.forward(X_test_norm)
+    y_pred = np.squeeze(logits, axis=-1)
+    y_pred = inverse_scale(y_pred, scaler)
 
-    if scaler is not None:
-        y_pred = y_pred * scaler["std"] + scaler["mean"]
+    test_loss = _loss_fn(y_test, y_pred)
+    print(f"Test MSE: {test_loss:.4f}")
 
-    test_loss = mse_loss(y_test, y_pred)
-
-    print(f"\nTest MSE: {test_loss:.4f}")
-
-    if "test_metrics" in model_data and model_data["test_metrics"]:
-        print("\n" + "=" * 70)
+    # Training history
+    if 'test_losses' in model_data:
+        print("\n" + "="*70)
         print("Training History")
-        print("=" * 70)
-
-        print("\nTest Metrics by Epoch:")
-        for epoch, metric in enumerate(model_data["test_metrics"], start=1):
-            print(f"  Epoch {epoch}: {metric:.4f}")
-
-    if "test_losses" in model_data:
+        print("="*70)
         print("\nTest Losses by Epoch:")
         for epoch, loss in enumerate(model_data["test_losses"], start=1):
             print(f"  Epoch {epoch}: {loss:.4f}")
