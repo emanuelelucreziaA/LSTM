@@ -48,6 +48,17 @@ def build_model(input_size=1, output_size=1, hidden_size=64):
         )
     )
 
+    model.add_dense_layer(
+        DenseLayer(
+            input_size=hidden_size,
+            output_size=output_size,
+            activation_fn=None,
+            activation_derivative=None,
+        )
+    )
+
+    return model
+
 def main():
     """Main evaluation pipeline"""
     print("\n" + "="*70)
@@ -76,7 +87,8 @@ def main():
     print("\nBuilding model architecture...")
 
     model = build_model(
-        input_size=X_train.shape[2],
+        input_size=X_test.shape[2],
+        output_size=output_size,
         hidden_size=hidden_size,
     )
 
@@ -99,8 +111,9 @@ def main():
     logits = model.forward(X_test_norm)
     y_pred = np.squeeze(logits, axis=-1)
     y_pred = inverse_scale(y_pred, scaler)
+    y_test_original = inverse_scale(y_test, scaler)
 
-    test_loss = _loss_fn(y_test, y_pred)
+    test_loss = _loss_fn(y_test_original, y_pred)
     print(f"Test MSE: {test_loss:.4f}")
 
     # Training history
