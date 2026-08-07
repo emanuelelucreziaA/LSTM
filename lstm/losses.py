@@ -9,55 +9,48 @@ Key concept:
 import numpy as np
 
 
-class CrossEntropy:
+class MSELoss:
     """
-    Cross-Entropy Loss for multi-class classification.
-    
+    Mean Squared Error loss for regression.
+
     Formula:
-      L = -Σ(y_true * log(y_pred))
-    
+      L = mean((y_pred - y_true)^2)
+
     Where:
-      - y_true: one-hot encoded targets (batch_size, num_classes)
-      - y_pred: softmax probabilities (batch_size, num_classes)
-    
-    Gradient w.r.t. softmax output: dL/dy_pred = -y_true / y_pred
-    But typically combined with softmax: dL/dz = (y_pred - y_true)
+      - y_true: ground-truth targets, any shape
+      - y_pred: network predictions, same shape as y_true
+
+    Gradient w.r.t. y_pred:
+      dL/dy_pred = 2 * (y_pred - y_true) / n
     """
-    
+
     def __call__(self, y_true, y_pred):
         """
-        Compute cross-entropy loss
-        
+        Compute MSE loss.
+
         Args:
-            y_true: One-hot encoded targets (batch_size, num_classes)
-            y_pred: Softmax probabilities (batch_size, num_classes)
-        
+            y_true: Ground-truth targets (any shape)
+            y_pred: Predictions (same shape as y_true)
+
         Returns:
             loss: Scalar average loss
         """
-        batch_size = y_true.shape[0]
-        
-        # Add small epsilon to prevent log(0)
-        epsilon = 1e-7
-        y_pred_clipped = np.clip(y_pred, epsilon, 1 - epsilon)
-        
-        # Cross-entropy: -Σ(y_true * log(y_pred))
-        loss = -np.sum(y_true * np.log(y_pred_clipped)) / batch_size
-        return loss
-    
+        y_true = np.asarray(y_true, dtype=np.float32).reshape(y_pred.shape)
+        y_pred = np.asarray(y_pred, dtype=np.float32)
+        return float(np.mean((y_pred - y_true) ** 2))
+
     def gradient(self, y_true, y_pred):
         """
-        Compute gradient of loss w.r.t. output.
-        
-        When combined with softmax, this simplifies to:
-        dL/dz = y_pred - y_true
-        
+        Compute gradient of MSE w.r.t. y_pred.
+
         Args:
-            y_true: One-hot encoded targets
-            y_pred: Softmax probabilities
-        
+            y_true: Ground-truth targets
+            y_pred: Predictions
+
         Returns:
-            gradient: dL/dz (same shape as y_pred)
+            gradient: dL/dy_pred (same shape as y_pred)
         """
-        # For softmax + cross-entropy, gradient is simply (y_pred - y_true)
-        return y_pred - y_true
+        y_true = np.asarray(y_true, dtype=np.float32).reshape(y_pred.shape)
+        y_pred = np.asarray(y_pred, dtype=np.float32)
+        diff = y_pred - y_true
+        return 2.0 * diff / diff.size

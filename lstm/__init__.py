@@ -20,7 +20,7 @@ from .activations import (
 )
 
 # Loss and optimizer imports
-from .losses import CrossEntropy
+from .losses import MSELoss
 from .optimizers import SGD, Adam
 
 # Lazy import for data utilities to avoid slow I/O at import time
@@ -41,6 +41,6 @@ __all__ = [
     'LSTMCell', 'LSTMLayer', 'DenseLayer', 'LSTMNetwork',
     'sigmoid', 'sigmoid_derivative', 'tanh', 'tanh_derivative',
     'relu', 'relu_derivative', 'softmax',
-    'CrossEntropy', 'SGD', 'Adam',
+    'MSELoss', 'SGD', 'Adam',
     'MNISTLoader', 'SequenceDataLoader', 'one_hot_encode'
 ]

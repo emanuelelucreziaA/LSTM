@@ -24,11 +24,13 @@ from lstm.lstm_layer import LSTMLayer
 from lstm.dense_layer import DenseLayer
 from lstm.network import LSTMNetwork
 from lstm.optimizers import Adam
+from lstm.losses import MSELoss
 from lstm.time_series import (
-    mse_loss,
     prepare_air_passengers,
     normalize_time_series_data,
 )
+
+_loss_fn = MSELoss()
 import pickle
 
 
@@ -77,7 +79,8 @@ def train_epoch(model, X_train, y_train, batch_size=32):
         logits = model.forward(X_batch)
 
         y_batch = y_batch.reshape(logits.shape)
-        loss, dL_doutput = mse_loss(y_batch, logits, return_gradient=True)
+        loss = _loss_fn(y_batch, logits)
+        dL_doutput = _loss_fn.gradient(y_batch, logits)
 
         # Backpropagate and update weights
         model.backward(dL_doutput)
@@ -105,7 +108,7 @@ def evaluate(model, X_test, y_test, batch_size=32):
 
         logits = model.forward(X_batch)
 
-        loss = mse_loss(y_batch, logits)
+        loss = _loss_fn(y_batch, logits)
         total_loss += loss
 
     avg_loss = total_loss / num_batches

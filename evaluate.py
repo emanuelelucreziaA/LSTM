@@ -17,7 +17,10 @@ import pickle
 from lstm.lstm_layer import LSTMLayer
 from lstm.dense_layer import DenseLayer
 from lstm.network import LSTMNetwork
-from lstm.time_series import mse_loss, prepare_air_passengers, inverse_scale
+from lstm.losses import MSELoss
+from lstm.time_series import prepare_air_passengers, inverse_scale
+
+_loss_fn = MSELoss()
 
 
 def load_model(weights_path):
@@ -106,7 +109,7 @@ def main():
     y_pred = np.squeeze(logits, axis=-1)
     y_pred = inverse_scale(y_pred, scaler)
 
-    test_loss = mse_loss(y_test, y_pred)
+    test_loss = _loss_fn(y_test, y_pred)
     print(f"Test MSE: {test_loss:.4f}")
 
     # Training history

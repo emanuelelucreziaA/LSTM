@@ -6,19 +6,6 @@ import os
 import numpy as np
 
 
-def mse_loss(y_true, y_pred, return_gradient=False):
-    """Mean squared error, optionally returning normalized gradient."""
-    y_true = np.asarray(y_true, dtype=np.float32).reshape(y_pred.shape)
-    y_pred = np.asarray(y_pred, dtype=np.float32)
-    diff = y_pred - y_true
-    loss = np.mean(diff ** 2)
-    if not return_gradient:
-        return loss
-
-    grad = 2.0 * diff / diff.size
-    return loss, grad
-
-
 def prepare_air_passengers(
     data_dir,
     seq_len=12,
