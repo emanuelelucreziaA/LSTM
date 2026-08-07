@@ -9,16 +9,11 @@ Architecture:
 """
 
 import os
-from dotenv import load_dotenv
-load_dotenv()
-import sys
-PROJECT_ROOT = os.getenv('PROJECT_ROOT', os.path.abspath(os.path.dirname(__file__)))
-sys.path.insert(0, PROJECT_ROOT)
 import numpy as np
 
-# Data directory (can be set in .env)
-DATA_DIR = os.getenv('DATA_DIR', os.path.join(PROJECT_ROOT, 'data'))
-os.makedirs(DATA_DIR, exist_ok=True)
+from lstm.bootstrap import initialize_environment
+
+PROJECT_ROOT, DATA_DIR = initialize_environment(ensure_data_dir=True)
 
 from lstm.lstm_layer import LSTMLayer
 from lstm.dense_layer import DenseLayer

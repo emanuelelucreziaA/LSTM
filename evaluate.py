@@ -6,14 +6,13 @@ Usage:
 """
 
 import os
-from dotenv import load_dotenv
-load_dotenv()
-import sys
-PROJECT_ROOT = os.getenv('PROJECT_ROOT', os.path.abspath(os.path.dirname(__file__)))
-sys.path.insert(0, PROJECT_ROOT)
 import numpy as np
-
 import pickle
+
+from lstm.bootstrap import initialize_environment
+
+PROJECT_ROOT, _ = initialize_environment()
+
 from lstm.lstm_layer import LSTMLayer
 from lstm.dense_layer import DenseLayer
 from lstm.network import LSTMNetwork
