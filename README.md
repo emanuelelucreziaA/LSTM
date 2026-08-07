@@ -8,7 +8,7 @@ A from-scratch implementation of LSTM (Long Short-Term Memory) Recurrent Neural 
 - **LSTM Layer**: Processes entire sequences with proper gradient accumulation
 - **Dense Output Layer**: Regression/Classification head
 - **Optimizers**: SGD with momentum, Adam
-- **Loss Functions**: Cross-Entropy (classification), MSE (regression)
+- **Loss Functions**: MSE (regression)
 - **Activation Functions**: Sigmoid, Tanh, ReLU, Softmax
 - **Training Pipeline**: Includes model serialization, metrics tracking, and evaluation
 
@@ -23,7 +23,7 @@ LSTM/
 │   ├── dense_layer.py        # Fully connected output layer
 │   ├── network.py            # Network composition
 │   ├── activations.py        # Activation functions
-│   ├── losses.py             # Loss functions (CrossEntropy)
+│   ├── losses.py             # Loss functions (MSE)
 │   ├── optimizers.py         # Optimizers (SGD, Adam)
 │   └── data.py               # synthetic sequence data generation
 ├── train.py                  # Training script
