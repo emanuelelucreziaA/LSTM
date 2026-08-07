@@ -1,11 +1,11 @@
 """
-Training script: Train LSTM on synthetic sequence classification.
+Training script: Train LSTM for AirPassengers regression.
 
 Usage:
     python train.py
 
 Architecture:
-    Sequence Input (seq_len, 1) -> LSTM (hidden_size=128) -> Dense (10) -> Softmax
+    Sequence Input (seq_len, 1) -> LSTM (hidden_size=64) -> Dense (1)
 """
 
 import csv
@@ -24,18 +24,14 @@ os.makedirs(DATA_DIR, exist_ok=True)
 from lstm.lstm_layer import LSTMLayer
 from lstm.dense_layer import DenseLayer
 from lstm.network import LSTMNetwork
-from lstm.activations import softmax
-from lstm.losses import CrossEntropy
 from lstm.optimizers import Adam
-from lstm.data import SequenceDataLoader, one_hot_encode
 import pickle
 
 
-def build_model(input_size=1, output_size=10, hidden_size=128, regression=False):
-    """Build an LSTM network for classification or regression."""
-    mode = 'regression' if regression else 'classification'
+def build_model(input_size=1, output_size=1, hidden_size=64):
+    """Build an LSTM network for AirPassengers regression."""
     print("\n" + "="*70)
-    print(f"Building LSTM Model for {mode}")
+    print("Building LSTM Model for regression")
     print(f"Architecture: Sequence(seq_len, {input_size}) -> LSTM(hidden={hidden_size}) -> Dense({output_size})")
     print("="*70)
 
@@ -53,7 +49,6 @@ def build_model(input_size=1, output_size=10, hidden_size=128, regression=False)
     ))
 
     model.set_optimizer(Adam(learning_rate=0.001))
-    model.set_loss(CrossEntropy() if not regression else None)
 
     print(f"✓ Model built with {sum(1 for layer in model.layers)} layer(s)")
     return model
@@ -122,8 +117,8 @@ def inverse_scale(y, scaler):
     return y * scaler['std'] + scaler['mean']
 
 
-def train_epoch(model, X_train, y_train, batch_size=32, regression=False):
-    """Train for one epoch (toy sanity check)."""
+def train_epoch(model, X_train, y_train, batch_size=32):
+    """Train for one epoch on AirPassengers regression."""
     num_samples = X_train.shape[0]
     num_batches = int(np.ceil(num_samples / batch_size))
     total_loss = 0.0
@@ -140,14 +135,10 @@ def train_epoch(model, X_train, y_train, batch_size=32, regression=False):
 
         logits = model.forward(X_batch)
 
-        if regression:
-            y_batch = y_batch.reshape(logits.shape)
-            loss = mse_loss(y_batch, logits)
-            dL_doutput = 2.0 * (logits - y_batch) / logits.shape[0]
-        else:
-            probs = softmax(logits)
-            loss = model.loss_fn(y_batch, probs)
-            dL_doutput = probs - y_batch
+        y_batch = y_batch.reshape(logits.shape)
+        loss = mse_loss(y_batch, logits)
+        # Dense/LSTM layers already normalize gradients by batch size.
+        dL_doutput = 2.0 * (logits - y_batch)
 
         # Backpropagate and update weights
         model.backward(dL_doutput)
@@ -161,12 +152,11 @@ def train_epoch(model, X_train, y_train, batch_size=32, regression=False):
     return total_loss / max(1, num_batches)
 
 
-def evaluate(model, X_test, y_test, batch_size=32, regression=False):
-    """Evaluate model on test or regression data."""
+def evaluate(model, X_test, y_test, batch_size=32):
+    """Evaluate model on regression data using MSE."""
     num_samples = X_test.shape[0]
     total_loss = 0.0
     num_batches = (num_samples + batch_size - 1) // batch_size
-    correct = 0
 
     for batch_idx in range(num_batches):
         start = batch_idx * batch_size
@@ -176,78 +166,45 @@ def evaluate(model, X_test, y_test, batch_size=32, regression=False):
 
         logits = model.forward(X_batch)
 
-        if regression:
-            loss = mse_loss(y_batch, logits)
-            total_loss += loss
-        else:
-            probs = softmax(logits)
-            loss = model.loss_fn(y_batch, probs)
-            total_loss += loss
-            predictions = np.argmax(probs, axis=1)
-            correct += np.sum(predictions == np.argmax(y_batch, axis=1))
+        loss = mse_loss(y_batch, logits)
+        total_loss += loss
 
     avg_loss = total_loss / num_batches
-    accuracy = correct / num_samples if not regression else None
-    return accuracy, avg_loss
+    return avg_loss
 
 
 def main():
     """Main training pipeline"""
-    dataset_mode = os.getenv('DATASET', 'air-passengers').lower()
     print("\n" + "="*70)
-    print(f"LSTM Training Pipeline - dataset mode: {dataset_mode}")
+    print("LSTM Training Pipeline - AirPassengers regression")
     print("="*70)
 
-    if dataset_mode == 'air-passengers':
-        print("\nLoading AirPassengers time-series data...")
-        X_train, y_train, X_val, y_val, X_test, y_test = prepare_air_passengers(
-            DATA_DIR,
-            seq_len=12,
-            horizon=1,
-            train_ratio=0.7,
-            val_ratio=0.15,
-        )
-        X_train, y_train, X_val, y_val, X_test, y_test, scaler = normalize_time_series_data(
-            X_train, y_train, X_val, y_val, X_test, y_test
-        )
-        regression = True
-        output_size = 1
-        hidden_size = 64
-    else:
-        print("\nLoading synthetic toy classification data...")
-        loader = SequenceDataLoader(
-            seq_len=20,
-            input_size=1,
-            num_classes=10,
-            train_samples=1000,
-            test_samples=200,
-            noise_level=0.05,
-            seed=42,
-        )
-        X_train, y_train, X_test, y_test = loader.load_data()
-        X_val, y_val = X_test, y_test
-        regression = False
-        output_size = 10
-        hidden_size = 64
+    print("\nLoading AirPassengers time-series data...")
+    X_train, y_train, X_val, y_val, X_test, y_test = prepare_air_passengers(
+        DATA_DIR,
+        seq_len=12,
+        horizon=1,
+        train_ratio=0.7,
+        val_ratio=0.15,
+    )
+    X_train, y_train, X_val, y_val, X_test, y_test, scaler = normalize_time_series_data(
+        X_train, y_train, X_val, y_val, X_test, y_test
+    )
+    output_size = 1
+    hidden_size = 64
 
     print(f"Training data: {X_train.shape} (batch_size, seq_len, input_size)")
     print(f"Training labels: {y_train.shape}")
-    if dataset_mode == 'air-passengers':
-        print(f"Validation data: {X_val.shape}")
-        print(f"Validation labels: {y_val.shape}")
-        print(f"Normalized using mean={scaler['mean']:.4f}, std={scaler['std']:.4f}")
+    print(f"Validation data: {X_val.shape}")
+    print(f"Validation labels: {y_val.shape}")
+    print(f"Normalized using mean={scaler['mean']:.4f}, std={scaler['std']:.4f}")
     print(f"Test data: {X_test.shape}")
     print(f"Test labels: {y_test.shape}")
-
-    if not regression:
-        y_train = one_hot_encode(y_train, num_classes=output_size)
-        y_test = one_hot_encode(y_test, num_classes=output_size)
 
     model = build_model(
         input_size=X_train.shape[2],
         output_size=output_size,
         hidden_size=hidden_size,
-        regression=regression,
     )
 
     num_epochs = 50
@@ -257,48 +214,39 @@ def main():
     print(f"  Epochs: {num_epochs}")
     print(f"  Batch size: {batch_size}")
     print(f"  Optimizer: Adam (lr=0.001)")
-    print(f"  Loss: {'MSE' if regression else 'CrossEntropy'}")
+    print("  Loss: MSE")
 
     train_losses = []
     val_losses = []
     test_losses = []
-    test_metrics = []
 
     for epoch in range(num_epochs):
         print(f"\n{'='*70}")
         print(f"Epoch {epoch+1}/{num_epochs}")
         print(f"{'='*70}")
 
-        train_loss = train_epoch(model, X_train, y_train, batch_size, regression=regression)
+        train_loss = train_epoch(model, X_train, y_train, batch_size)
         train_losses.append(train_loss)
         print(f"Training Loss: {train_loss:.4f}")
-        if dataset_mode == 'air-passengers':
-            _, val_loss = evaluate(model, X_val, y_val, batch_size=batch_size, regression=regression)
-            val_losses.append(val_loss)
-            print(f"Validation MSE: {val_loss:.4f}")
-        test_acc, test_loss = evaluate(model, X_test, y_test, batch_size, regression=regression)
+        val_loss = evaluate(model, X_val, y_val, batch_size=batch_size)
+        val_losses.append(val_loss)
+        print(f"Validation MSE: {val_loss:.4f}")
+        test_loss = evaluate(model, X_test, y_test, batch_size)
         test_losses.append(test_loss)
-        if regression:
-            print(f"Test MSE: {test_loss:.4f}")
-        else:
-            test_metrics.append(test_acc)
-            print(f"Test Loss: {test_loss:.4f}")
-            print(f"Test Accuracy: {test_acc:.4f} ({int(test_acc * 100)}%)")
+        print(f"Test MSE: {test_loss:.4f}")
 
     model_save_path = os.path.join(PROJECT_ROOT, 'lstm_model.pkl')
     print(f"\nSaving model info to {model_save_path}...")
 
     try:
         model_data = {
-            'dataset_mode': dataset_mode,
             'hidden_size': hidden_size,
             'output_size': output_size,
             'train_losses': train_losses,
             'val_losses': val_losses,
             'test_losses': test_losses,
-            'test_metrics': test_metrics,
             'weights': model.get_weights(),
-            'scaler': scaler if dataset_mode == 'air-passengers' else None,
+            'scaler': scaler,
         }
         with open(model_save_path, 'wb') as f:
             pickle.dump(model_data, f)
@@ -307,11 +255,8 @@ def main():
         print(f"✗ Failed to save model metadata: {e}")
 
     np.save(os.path.join(DATA_DIR, 'train_losses.npy'), np.array(train_losses))
-    if val_losses:
-        np.save(os.path.join(DATA_DIR, 'val_losses.npy'), np.array(val_losses))
+    np.save(os.path.join(DATA_DIR, 'val_losses.npy'), np.array(val_losses))
     np.save(os.path.join(DATA_DIR, 'test_losses.npy'), np.array(test_losses))
-    if test_metrics:
-        np.save(os.path.join(DATA_DIR, 'test_accuracies.npy'), np.array(test_metrics))
     print("✓ Metrics saved to data/")
 
     print("\n" + "="*70)
