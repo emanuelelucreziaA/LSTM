@@ -1,11 +1,10 @@
 """
-Evaluation script: Load trained model and evaluate on test set
+Evaluation script: Load trained AirPassengers model and evaluate on test set
 
 Usage:
     python evaluate.py
 """
 
-import csv
 import os
 from dotenv import load_dotenv
 load_dotenv()
@@ -18,8 +17,7 @@ import pickle
 from lstm.lstm_layer import LSTMLayer
 from lstm.dense_layer import DenseLayer
 from lstm.network import LSTMNetwork
-from lstm.activations import softmax
-from lstm.data import SequenceDataLoader
+from lstm.time_series import mse_loss, prepare_air_passengers, inverse_scale
 
 
 def load_model(weights_path):
@@ -36,41 +34,7 @@ def load_model(weights_path):
         return None
 
 
-def mse_loss(y_true, y_pred):
-    y_true = np.asarray(y_true, dtype=np.float32).reshape(y_pred.shape)
-    y_pred = np.asarray(y_pred, dtype=np.float32)
-    return np.mean((y_pred - y_true) ** 2)
-
-
-def prepare_air_passengers(data_dir, seq_len=12, horizon=1, train_ratio=0.7, val_ratio=0.15):
-    csv_path = os.path.join(data_dir, 'AirPassengers.csv')
-    if not os.path.exists(csv_path):
-        raise FileNotFoundError(f"AirPassengers.csv not found in {data_dir}")
-
-    dates = []
-    values = []
-    with open(csv_path, 'r', encoding='utf-8') as f:
-        reader = csv.reader(f)
-        next(reader)
-        for row in reader:
-            dates.append(row[0])
-            values.append(float(row[1]))
-
-    values = np.array(values, dtype=np.float32)
-    num_samples = len(values) - seq_len - horizon + 1
-    X = np.zeros((num_samples, seq_len, 1), dtype=np.float32)
-    y = np.zeros((num_samples,), dtype=np.float32)
-
-    for i in range(num_samples):
-        X[i, :, 0] = values[i : i + seq_len]
-        y[i] = values[i + seq_len + horizon - 1]
-
-    split1 = int(len(X) * train_ratio)
-    split2 = split1 + int(len(X) * val_ratio)
-    return X[:split1], y[:split1], X[split1:split2], y[split1:split2], X[split2:], y[split2:]
-
-
-def build_model(input_size=1, output_size=10, hidden_size=128):
+def build_model(input_size=1, output_size=1, hidden_size=64):
     """Build model architecture (matching training)"""
     model = LSTMNetwork()
     
@@ -89,45 +53,10 @@ def build_model(input_size=1, output_size=10, hidden_size=128):
     return model
 
 
-def confusion_matrix(y_true, y_pred, num_classes=10):
-    """Compute confusion matrix"""
-    cm = np.zeros((num_classes, num_classes), dtype=int)
-    
-    for i in range(len(y_true)):
-        cm[int(y_true[i]), int(y_pred[i])] += 1
-    
-    return cm
-
-
-def analyze_predictions(y_true, y_pred):
-    """Analyze model predictions"""
-    print("\n" + "="*70)
-    print("Prediction Analysis")
-    print("="*70)
-    
-    # Accuracy
-    accuracy = np.mean(y_true == y_pred)
-    print(f"\nOverall Accuracy: {accuracy:.4f} ({int(accuracy*100)}%)")
-    
-    # Per-class accuracy
-    print("\nPer-Class Accuracy:")
-    for digit in range(10):
-        mask = y_true == digit
-        if np.sum(mask) > 0:
-            class_acc = np.mean(y_pred[mask] == digit)
-            count = np.sum(mask)
-            print(f"  Digit {digit}: {class_acc:.4f} ({count} samples)")
-    
-    # Confusion matrix
-    cm = confusion_matrix(y_true, y_pred)
-    print("\nConfusion Matrix (first 5x5):")
-    print(cm[:5, :5])
-
-
 def main():
     """Main evaluation pipeline"""
     print("\n" + "="*70)
-    print("LSTM Evaluation: synthetic sequence classification")
+    print("LSTM Evaluation: AirPassengers regression")
     print("="*70)
     
     # Load model metadata
@@ -137,36 +66,17 @@ def main():
     if model_data is None:
         return
 
-    dataset_mode = os.getenv('DATASET', 'air-passengers').lower()
-    print(f"\nDataset mode: {dataset_mode}")
+    print("\nLoading AirPassengers test data...")
+    _, _, _, _, X_test, y_test = prepare_air_passengers(
+        os.path.join(PROJECT_ROOT, 'data'),
+        seq_len=12,
+        horizon=1,
+        train_ratio=0.7,
+        val_ratio=0.15,
+    )
 
-    if dataset_mode == 'air-passengers':
-        print("\nLoading AirPassengers test data...")
-        X_train, y_train, X_val, y_val, X_test, y_test = prepare_air_passengers(
-            os.path.join(PROJECT_ROOT, 'data'),
-            seq_len=12,
-            horizon=1,
-            train_ratio=0.7,
-            val_ratio=0.15,
-        )
-        regression = True
-        output_size = 1
-        hidden_size = 64
-    else:
-        print("\nLoading synthetic sequential test data...")
-        loader = SequenceDataLoader(
-            seq_len=50,
-            input_size=1,
-            num_classes=10,
-            train_samples=5000,
-            test_samples=1000,
-            noise_level=0.1,
-            seed=42,
-        )
-        X_train, y_train, X_test, y_test = loader.load_data()
-        regression = False
-        output_size = 10
-        hidden_size = 128
+    output_size = int(model_data.get('output_size', 1))
+    hidden_size = int(model_data.get('hidden_size', 64))
 
     # Build and setup model
     print("\nBuilding model architecture...")
@@ -185,34 +95,25 @@ def main():
 
     # Predictions
     print("\nGenerating predictions...")
-    if regression:
-        scaler = model_data.get('scaler')
-        if scaler is not None:
-            X_test_norm = (X_test - scaler['mean']) / scaler['std']
-        else:
-            X_test_norm = X_test
+    scaler = model_data.get('scaler')
+    if scaler is None:
+        print("✗ Missing scaler in saved model data.")
+        print("  Re-train the model using: python train.py")
+        return
 
-        logits = model.forward(X_test_norm)
-        y_pred = np.squeeze(logits, axis=-1)
-        if scaler is not None:
-            y_pred = y_pred * scaler['std'] + scaler['mean']
+    X_test_norm = (X_test - scaler['mean']) / scaler['std']
+    logits = model.forward(X_test_norm)
+    y_pred = np.squeeze(logits, axis=-1)
+    y_pred = inverse_scale(y_pred, scaler)
 
-        test_loss = mse_loss(y_test, y_pred)
-        print(f"Test MSE: {test_loss:.4f}")
-    else:
-        y_pred = model.predict(X_test)
-        analyze_predictions(y_test, y_pred)
+    test_loss = mse_loss(y_test, y_pred)
+    print(f"Test MSE: {test_loss:.4f}")
 
     # Training history
-    if 'test_metrics' in model_data and model_data['test_metrics']:
+    if 'test_losses' in model_data:
         print("\n" + "="*70)
         print("Training History")
         print("="*70)
-        print("\nTest Metrics by Epoch:")
-        for epoch, metric in enumerate(model_data['test_metrics']):
-            print(f"  Epoch {epoch+1}: {metric:.4f}")
-
-    if 'test_losses' in model_data:
         print("\nTest Losses by Epoch:")
         for epoch, loss in enumerate(model_data['test_losses']):
             print(f"  Epoch {epoch+1}: {loss:.4f}")

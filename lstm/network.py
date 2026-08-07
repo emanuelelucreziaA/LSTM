@@ -198,9 +198,23 @@ class LSTMNetwork:
         if len(weights) != len(self.layers):
             raise ValueError('Weight count does not match model layers')
 
+        def _ensure_shape(value, expected_shape, name):
+            if value.shape != expected_shape:
+                raise ValueError(
+                    f"Weight shape mismatch for {name}: expected {expected_shape}, got {value.shape}"
+                )
+
         for layer, weight_dict in zip(self.layers, weights):
             if weight_dict['type'] == 'lstm':
                 cell = layer.lstm_cell
+                _ensure_shape(weight_dict['W_f'], cell.W_f.shape, 'W_f')
+                _ensure_shape(weight_dict['b_f'], cell.b_f.shape, 'b_f')
+                _ensure_shape(weight_dict['W_i'], cell.W_i.shape, 'W_i')
+                _ensure_shape(weight_dict['b_i'], cell.b_i.shape, 'b_i')
+                _ensure_shape(weight_dict['W_c'], cell.W_c.shape, 'W_c')
+                _ensure_shape(weight_dict['b_c'], cell.b_c.shape, 'b_c')
+                _ensure_shape(weight_dict['W_o'], cell.W_o.shape, 'W_o')
+                _ensure_shape(weight_dict['b_o'], cell.b_o.shape, 'b_o')
                 cell.W_f = weight_dict['W_f'].copy()
                 cell.b_f = weight_dict['b_f'].copy()
                 cell.W_i = weight_dict['W_i'].copy()
@@ -210,6 +224,8 @@ class LSTMNetwork:
                 cell.W_o = weight_dict['W_o'].copy()
                 cell.b_o = weight_dict['b_o'].copy()
             elif weight_dict['type'] == 'dense':
+                _ensure_shape(weight_dict['W'], layer.W.shape, 'dense.W')
+                _ensure_shape(weight_dict['b'], layer.b.shape, 'dense.b')
                 layer.W = weight_dict['W'].copy()
                 layer.b = weight_dict['b'].copy()
             else:
