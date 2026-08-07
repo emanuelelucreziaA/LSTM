@@ -56,7 +56,6 @@ This will:
 - Load `data/AirPassengers.csv` (1949-1960 monthly passenger counts)
 - Normalize using training set statistics
 - Split into train (70%), validation (15%), and test (15%) sets
-- Hyperparameter search over hidden sizes and learning rates
 - Train the model for 50 epochs
 - Save trained weights and scaler to `lstm_model.pkl`
 - Save metrics (train/val/test losses) to `data/`

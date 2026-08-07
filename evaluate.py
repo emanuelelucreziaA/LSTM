@@ -1,5 +1,5 @@
 """
-Evaluation script: Load trained AirPassengers model and evaluate on test set
+Evaluation script: Load trained model and evaluate on the AirPassengers test set.
 
 Usage:
     python evaluate.py
@@ -23,13 +23,14 @@ _loss_fn = MSELoss()
 
 
 def load_model(weights_path):
-    """Load model metadata"""
+    """Load trained model checkpoint."""
     try:
-        with open(weights_path, 'rb') as f:
+        with open(weights_path, "rb") as f:
             model_data = pickle.load(f)
 
         print("✓ Model metadata loaded successfully")
         return model_data
+
     except FileNotFoundError:
         print(f"✗ Model weights not found at {weights_path}")
         print("  First train the model using: python train.py")
@@ -39,21 +40,13 @@ def load_model(weights_path):
 def build_model(input_size=1, output_size=1, hidden_size=64):
     """Build model architecture (matching training)"""
     model = LSTMNetwork()
-    
-    model.add_lstm_layer(LSTMLayer(
-        input_size=input_size,
-        hidden_size=hidden_size
-    ))
-    
-    model.add_dense_layer(DenseLayer(
-        input_size=hidden_size,
-        output_size=output_size,
-        activation_fn=None,
-        activation_derivative=None
-    ))
-    
-    return model
 
+    model.add_lstm_layer(
+        LSTMLayer(
+            input_size=input_size,
+            hidden_size=hidden_size,
+        )
+    )
 
 def main():
     """Main evaluation pipeline"""
@@ -80,20 +73,19 @@ def main():
     output_size = int(model_data.get('output_size', 1))
     hidden_size = int(model_data.get('hidden_size', 64))
 
-    # Build and setup model
     print("\nBuilding model architecture...")
+
     model = build_model(
-        input_size=1,
-        output_size=output_size,
+        input_size=X_train.shape[2],
         hidden_size=hidden_size,
     )
 
-    if 'weights' not in model_data or model_data['weights'] is None:
-        print("✗ No trained weights found in saved model data.")
+    if "weights" not in model_data or model_data["weights"] is None:
+        print("✗ No trained weights found.")
         print("  Train the model first using: python train.py")
         return
 
-    model.set_weights(model_data['weights'])
+    model.set_weights(model_data["weights"])
 
     # Predictions
     print("\nGenerating predictions...")
@@ -117,13 +109,13 @@ def main():
         print("Training History")
         print("="*70)
         print("\nTest Losses by Epoch:")
-        for epoch, loss in enumerate(model_data['test_losses']):
-            print(f"  Epoch {epoch+1}: {loss:.4f}")
+        for epoch, loss in enumerate(model_data["test_losses"], start=1):
+            print(f"  Epoch {epoch}: {loss:.4f}")
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Evaluation Complete!")
-    print("="*70)
+    print("=" * 70)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

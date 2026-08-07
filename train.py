@@ -178,6 +178,7 @@ def main():
     try:
         model_data = {
             'hidden_size': hidden_size,
+            'data_params': data_params if not regression else None,
             'output_size': output_size,
             'train_losses': train_losses,
             'val_losses': val_losses,
