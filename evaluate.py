@@ -13,9 +13,7 @@ from lstm.bootstrap import initialize_environment
 
 PROJECT_ROOT, _ = initialize_environment()
 
-from lstm.lstm_layer import LSTMLayer
-from lstm.dense_layer import DenseLayer
-from lstm.network import LSTMNetwork
+from lstm.network import build_lstm_regression_model
 from lstm.losses import MSELoss
 from lstm.time_series import prepare_air_passengers, inverse_scale
 
@@ -35,29 +33,6 @@ def load_model(weights_path):
         print(f"✗ Model weights not found at {weights_path}")
         print("  First train the model using: python train.py")
         return None
-
-
-def build_model(input_size=1, output_size=1, hidden_size=64):
-    """Build model architecture (matching training)"""
-    model = LSTMNetwork()
-
-    model.add_lstm_layer(
-        LSTMLayer(
-            input_size=input_size,
-            hidden_size=hidden_size,
-        )
-    )
-
-    model.add_dense_layer(
-        DenseLayer(
-            input_size=hidden_size,
-            output_size=output_size,
-            activation_fn=None,
-            activation_derivative=None,
-        )
-    )
-
-    return model
 
 def main():
     """Main evaluation pipeline"""
@@ -86,7 +61,7 @@ def main():
 
     print("\nBuilding model architecture...")
 
-    model = build_model(
+    model = build_lstm_regression_model(
         input_size=X_test.shape[2],
         output_size=output_size,
         hidden_size=hidden_size,

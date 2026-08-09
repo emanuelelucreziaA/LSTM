@@ -10,6 +10,9 @@ Supports both regression and classification tasks.
 import copy
 import numpy as np
 
+from .dense_layer import DenseLayer
+from .lstm_layer import LSTMLayer
+
 
 class LSTMNetwork:
     """
@@ -235,3 +238,32 @@ class LSTMNetwork:
                 layer.b = weight_dict['b'].copy()
             else:
                 raise ValueError(f"Unknown layer type in weights: {weight_dict['type']}")
+
+
+def build_lstm_regression_model(
+    input_size=1,
+    output_size=1,
+    hidden_size=64,
+    optimizer=None,
+):
+    """Create the default LSTM->Dense regression architecture used by scripts."""
+    model = LSTMNetwork()
+    model.add_lstm_layer(
+        LSTMLayer(
+            input_size=input_size,
+            hidden_size=hidden_size,
+        )
+    )
+    model.add_dense_layer(
+        DenseLayer(
+            input_size=hidden_size,
+            output_size=output_size,
+            activation_fn=None,
+            activation_derivative=None,
+        )
+    )
+
+    if optimizer is not None:
+        model.set_optimizer(optimizer)
+
+    return model
