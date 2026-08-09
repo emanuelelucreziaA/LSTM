@@ -111,7 +111,8 @@ def main():
     logits = model.forward(X_test_norm)
     y_pred = np.squeeze(logits, axis=-1)
     y_pred = inverse_scale(y_pred, scaler)
-    y_test_original = inverse_scale(y_test, scaler)
+    # y_test from prepare_air_passengers is already in original scale.
+    y_test_original = y_test
 
     test_loss = _loss_fn(y_test_original, y_pred)
     print(f"Test MSE: {test_loss:.4f}")

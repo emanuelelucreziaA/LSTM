@@ -25,7 +25,9 @@ LSTM/
 │   ├── activations.py        # Activation functions
 │   ├── losses.py             # Loss functions (MSE)
 │   ├── optimizers.py         # Optimizers (SGD, Adam)
-│   └── data.py               # synthetic sequence data generation
+│   ├── bootstrap.py          # Runtime/bootstrap helpers for scripts
+│   ├── time_series.py        # AirPassengers prep + normalization utilities
+│   └── data.py               # Legacy synthetic sequence data utilities
 ├── train.py                  # Training script
 ├── evaluate.py               # Evaluation script
 ├── tests/
@@ -35,6 +37,8 @@ LSTM/
 ├── data/                     # Dataset directory
 └── requirements.txt          # Dependencies
 ```
+
+Note: The current training/evaluation pipeline (`train.py`, `evaluate.py`) uses `lstm.bootstrap` and `lstm.time_series` for AirPassengers regression. `lstm.data` remains in the repo for synthetic-sequence/legacy workflows.
 
 ## Getting Started
 
