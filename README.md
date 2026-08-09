@@ -152,6 +152,5 @@ Hidden state update: `h_t = o_t ⊙ tanh(C_t)`
 ## References
 
 - Hochreiter, S., & Schmidhuber, J. (1997). "Long Short-Term Memory". Neural Computation, 9(8).
-- Graves, A. (2012). "Supervised Sequence Labelling with Recurrent Neural Networks".
 - Kingma, D. P., & Ba, J. (2014). "Adam: A Method for Stochastic Optimization". arXiv:1412.6980.
-- Goodfellow, I., Bengio, Y., & Courville, A. (2016). "Deep Learning". MIT Press.
+
