@@ -16,10 +16,10 @@ from .lstm_layer import LSTMLayer
 
 class LSTMNetwork:
     """
-    LSTM Network: stack of LSTM layers followed by dense output layer.
+    LSTM Network: single LSTM layer followed by dense output layer.
     
     Supports regression (continuous outputs) and classification (discrete classes):
-    - LSTM layers process the entire sequence
+    - One LSTM layer processes the entire sequence
     - Dense layer maps final LSTM hidden state to output values or class logits
     """
     
@@ -30,6 +30,8 @@ class LSTMNetwork:
     
     def add_lstm_layer(self, lstm_layer):
         """Add an LSTM layer to the network"""
+        if any(hasattr(layer, 'lstm_cell') for layer in self.layers):
+            raise ValueError('LSTMNetwork supports only one LSTM layer')
         self.layers.append(lstm_layer)
         return self
     
