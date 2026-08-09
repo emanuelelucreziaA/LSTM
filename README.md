@@ -5,7 +5,7 @@ A from-scratch implementation of LSTM (Long Short-Term Memory) Recurrent Neural 
 ## Features
 
 - **LSTM Cell**: Full implementation with all 4 gates (forget, input, cell, output) and BPTT
-- **LSTM Layer**: Processes entire sequences with proper gradient accumulation
+- **LSTM Layer**: Single recurrent layer that processes entire sequences with proper gradient accumulation
 - **Dense Output Layer**: Regression/Classification head
 - **Optimizers**: SGD with momentum, Adam
 - **Loss Functions**: MSE (regression)
@@ -21,11 +21,13 @@ LSTM/
 │   ├── lstm_cell.py          # LSTM cell implementation
 │   ├── lstm_layer.py         # LSTM layer (processes sequences)
 │   ├── dense_layer.py        # Fully connected output layer
-│   ├── network.py            # Network composition
+│   ├── network.py            # Single-layer LSTM + dense network composition
 │   ├── activations.py        # Activation functions
 │   ├── losses.py             # Loss functions (MSE)
 │   ├── optimizers.py         # Optimizers (SGD, Adam)
-│   └── data.py               # synthetic sequence data generation
+│   ├── bootstrap.py          # Runtime/bootstrap helpers for scripts
+│   ├── time_series.py        # AirPassengers prep + normalization utilities
+│   └── data.py               # Legacy synthetic sequence data utilities
 ├── train.py                  # Training script
 ├── evaluate.py               # Evaluation script
 ├── tests/
@@ -35,6 +37,8 @@ LSTM/
 ├── data/                     # Dataset directory
 └── requirements.txt          # Dependencies
 ```
+
+Note: The current training/evaluation pipeline (`train.py`, `evaluate.py`) uses `lstm.bootstrap` and `lstm.time_series` for AirPassengers regression. `lstm.data` remains in the repo for synthetic-sequence/legacy workflows.
 
 ## Getting Started
 
@@ -87,6 +91,8 @@ Tests basic forward/backward passes for:
 
 ## Architecture
 
+The supported network architecture is fixed to exactly one LSTM layer followed by one dense output layer. Stacked or multi-layer LSTM networks are not supported in this project.
+
 ```
 Input Sequence (batch_size, seq_len, input_size)
           ↓
@@ -117,11 +123,12 @@ Hidden state update: `h_t = o_t ⊙ tanh(C_t)`
 ### LSTM Configuration (AirPassengers)
 - Input size: 1 (univariate time series)
 - Sequence length: 12 (lagged 12 months)
-- Hidden size: 64 (optimized via grid search)
+- Hidden size: 64
+- Recurrent depth: 1 LSTM layer
 - Output size: 1 (regression: next month prediction)
 
 ### Training Configuration
-- Optimizer: Adam (learning rate: 0.001–0.005)
+- Optimizer: Adam (learning rate: 0.001)
 - Loss: Mean Squared Error (MSE)
 - Epochs: 50
 - Batch size: 16
@@ -145,6 +152,7 @@ Hidden state update: `h_t = o_t ⊙ tanh(C_t)`
 - Loss histories saved as NumPy arrays for analysis
 
 ### Known Limitations
+- The network implementation supports only one LSTM layer and one dense output layer
 - No gradient clipping implemented (may experience vanishing/exploding gradients on very long sequences)
 - No dropout or regularization layers
 - Educational implementation; production systems should use PyTorch, TensorFlow, or similar

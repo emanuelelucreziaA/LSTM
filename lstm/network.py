@@ -10,13 +10,16 @@ Supports both regression and classification tasks.
 import copy
 import numpy as np
 
+from .dense_layer import DenseLayer
+from .lstm_layer import LSTMLayer
+
 
 class LSTMNetwork:
     """
-    LSTM Network: stack of LSTM layers followed by dense output layer.
+    LSTM Network: single LSTM layer followed by dense output layer.
     
     Supports regression (continuous outputs) and classification (discrete classes):
-    - LSTM layers process the entire sequence
+    - One LSTM layer processes the entire sequence
     - Dense layer maps final LSTM hidden state to output values or class logits
     """
     
@@ -27,6 +30,8 @@ class LSTMNetwork:
     
     def add_lstm_layer(self, lstm_layer):
         """Add an LSTM layer to the network"""
+        if any(hasattr(layer, 'lstm_cell') for layer in self.layers):
+            raise ValueError('LSTMNetwork supports only one LSTM layer')
         self.layers.append(lstm_layer)
         return self
     
@@ -235,3 +240,32 @@ class LSTMNetwork:
                 layer.b = weight_dict['b'].copy()
             else:
                 raise ValueError(f"Unknown layer type in weights: {weight_dict['type']}")
+
+
+def build_lstm_regression_model(
+    input_size=1,
+    output_size=1,
+    hidden_size=64,
+    optimizer=None,
+):
+    """Create the default LSTM->Dense regression architecture used by scripts."""
+    model = LSTMNetwork()
+    model.add_lstm_layer(
+        LSTMLayer(
+            input_size=input_size,
+            hidden_size=hidden_size,
+        )
+    )
+    model.add_dense_layer(
+        DenseLayer(
+            input_size=hidden_size,
+            output_size=output_size,
+            activation_fn=None,
+            activation_derivative=None,
+        )
+    )
+
+    if optimizer is not None:
+        model.set_optimizer(optimizer)
+
+    return model

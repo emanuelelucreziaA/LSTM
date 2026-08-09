@@ -15,9 +15,7 @@ from lstm.bootstrap import initialize_environment
 
 PROJECT_ROOT, DATA_DIR = initialize_environment(ensure_data_dir=True)
 
-from lstm.lstm_layer import LSTMLayer
-from lstm.dense_layer import DenseLayer
-from lstm.network import LSTMNetwork
+from lstm.network import build_lstm_regression_model
 from lstm.optimizers import Adam
 from lstm.losses import MSELoss
 from lstm.time_series import (
@@ -27,32 +25,6 @@ from lstm.time_series import (
 
 _loss_fn = MSELoss()
 import pickle
-
-
-def build_model(input_size=1, output_size=1, hidden_size=64):
-    """Build an LSTM network for AirPassengers regression."""
-    print("\n" + "="*70)
-    print("Building LSTM Model for regression")
-    print(f"Architecture: Sequence(seq_len, {input_size}) -> LSTM(hidden={hidden_size}) -> Dense({output_size})")
-    print("="*70)
-
-    model = LSTMNetwork()
-    model.add_lstm_layer(LSTMLayer(
-        input_size=input_size,
-        hidden_size=hidden_size
-    ))
-
-    model.add_dense_layer(DenseLayer(
-        input_size=hidden_size,
-        output_size=output_size,
-        activation_fn=None,
-        activation_derivative=None
-    ))
-
-    model.set_optimizer(Adam(learning_rate=0.001))
-
-    print(f"✓ Model built with {sum(1 for layer in model.layers)} layer(s)")
-    return model
 
 
 def train_epoch(model, X_train, y_train, batch_size=32):
@@ -138,11 +110,18 @@ def main():
     print(f"Test data: {X_test.shape}")
     print(f"Test labels: {y_test.shape}")
 
-    model = build_model(
+    print("\n" + "="*70)
+    print("Building LSTM Model for regression")
+    print(f"Architecture: Sequence(seq_len, {X_train.shape[2]}) -> LSTM(hidden={hidden_size}) -> Dense({output_size})")
+    print("="*70)
+
+    model = build_lstm_regression_model(
         input_size=X_train.shape[2],
         output_size=output_size,
         hidden_size=hidden_size,
+        optimizer=Adam(learning_rate=0.001),
     )
+    print(f"✓ Model built with {sum(1 for layer in model.layers)} layer(s)")
 
     num_epochs = 50
     batch_size = 16
